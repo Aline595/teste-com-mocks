@@ -17,33 +17,67 @@ import br.com.alura.leilao.model.Leilao;
 import br.com.alura.leilao.model.Usuario;
 
 class FinalizarLeilaoServiceTest {
-
+	
 	private FinalizarLeilaoService service;
 	
 	@Mock
 	private LeilaoDao leilaoDao;
 	
+	@Mock
+	private EnviadorDeEmails enviadorDeEmails;
+	
 	@BeforeEach
 	public void beforeEach() {
-		MockitoAnnotations.initMocks(this); //Inicia o que tem a anotação @mock
-		this.service = new FinalizarLeilaoService(leilaoDao);
+		MockitoAnnotations.initMocks(this);
+		this.service = new FinalizarLeilaoService(leilaoDao, enviadorDeEmails);
 	}
 
 	@Test
 	void deveriaFinalizarUmLeilao() {
-		List<Leilao> leiloes = leiloes(); // Coloca o leilão que crieo para o teste 
+		List<Leilao> leiloes = leiloes();
 		
-		Mockito.when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes); //Define o que será retornado na mock
+		Mockito.when(leilaoDao.buscarLeiloesExpirados())
+		.thenReturn(leiloes);
 		
 		service.finalizarLeiloesExpirados();
 		
-		Leilao leilao = leiloes.get(0); // Pega o leilao da posiçaõ zero no array
-		Assert.assertTrue(leilao.isFechado()); // Verifica se leilão foi fechado
-		Assert.assertEquals(new BigDecimal("900"), leilao.getLanceVencedor().getValor());//Verifica se o lance vencedor é o de maior 
+		Leilao leilao = leiloes.get(0);
+		Assert.assertTrue(leilao.isFechado());
+		Assert.assertEquals(new BigDecimal("900"), 
+				leilao.getLanceVencedor().getValor());
 		
-		Mockito.verify(leilaoDao).salvar(leilao); // assertiva no mock, verifica se salvou no banco
+		Mockito.verify(leilaoDao).salvar(leilao);
+	}
+
+	@Test
+	void deveriaEnviarEmailParaVencedorDoLeilao() {
+		List<Leilao> leiloes = leiloes();
+		
+		Mockito.when(leilaoDao.buscarLeiloesExpirados())
+		.thenReturn(leiloes);
+		
+		service.finalizarLeiloesExpirados();
+		
+		Leilao leilao = leiloes.get(0);
+		Lance lanceVencedor = leilao.getLanceVencedor();
+		
+		Mockito.verify(enviadorDeEmails).enviarEmailVencedorLeilao(lanceVencedor);
 	}
 	
+	@Test
+	void naoDeveriaEnviarEmailParaVencedorDoLeilaoEmCasoDeErroAoEncerrarOLeilao() {
+		List<Leilao> leiloes = leiloes();
+		
+		Mockito.when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes);
+		
+		Mockito.when(leilaoDao.salvar(Mockito.any())).thenThrow(RuntimeException.class); //Força uma exception
+		
+		try {
+			service.finalizarLeiloesExpirados();
+			Mockito.verifyNoInteractions(enviadorDeEmails);
+		} catch (Exception e) {}
+	}
+
 	private List<Leilao> leiloes() {
 		List<Leilao> lista = new ArrayList<>();
 		
